@@ -118,7 +118,7 @@ func (a *App) printMainHelp() error {
 Bind a repository to one GitHub account without changing gh's global active account.
 
 Usage:
-  gh git bind <account> [--hostname <host>]
+  gh git bind <github-username> [--hostname <host>]
   gh git unbind
   gh git status [--json]
   gh git accounts [--hostname <host>]
@@ -138,7 +138,7 @@ Commands:
 Quick start:
   eval "$(gh git shell-init bash)"  # run once per bash shell
   cd /path/to/repository
-  gh git bind <account>
+  gh git bind <github-username>
   gh git status
 
 Use zsh or fish instead of bash for those shells. The shell hook is
@@ -160,7 +160,7 @@ The hidden credential command is called by Git's repository-local helper.
 }
 
 func (a *App) InitHelp() error {
-	_, err := io.WriteString(a.Out, "gh git init is intentionally not automatic; source `eval \"$(gh git shell-init bash)\"` once, then run `gh git bind <account>` in a repository.\n")
+	_, err := io.WriteString(a.Out, "gh git init is intentionally not automatic; source `eval \"$(gh git shell-init bash)\"` once, then run `gh git bind <github-username>` in a repository.\n")
 	return err
 }
 
@@ -170,7 +170,7 @@ func parseBindArgs(args []string) (string, string, error) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--help", "-h":
-			return "", "", errors.New("usage: gh git bind <account> [--hostname <host>]")
+			return "", "", errors.New("usage: gh git bind <github-username> [--hostname <host>]")
 		case "--hostname", "--host":
 			if i+1 >= len(args) {
 				return "", "", fmt.Errorf("%s requires a value", args[i])
@@ -189,12 +189,12 @@ func parseBindArgs(args []string) (string, string, error) {
 			} else if account == "" {
 				account = args[i]
 			} else {
-				return "", "", errors.New("usage: gh git bind <account> [--hostname <host>]")
+				return "", "", errors.New("usage: gh git bind <github-username> [--hostname <host>]")
 			}
 		}
 	}
 	if account == "" {
-		return "", "", errors.New("usage: gh git bind <account> [--hostname <host>]")
+		return "", "", errors.New("usage: gh git bind <github-username> [--hostname <host>]")
 	}
 	return account, host, nil
 }

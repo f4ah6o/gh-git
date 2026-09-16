@@ -170,7 +170,7 @@ shared across unrelated GitHub paths by Git's own credential cache.
 ### Git over SSH
 
 `gh-git` does not generate keys, upload keys, modify `~/.ssh`, or change the
-configured remote URL. If an existing exact alias named `github-<account>` points to the
+configured remote URL. If an existing exact alias named `github-<github-username>` points to the
 bound host, for example:
 
 ```sshconfig

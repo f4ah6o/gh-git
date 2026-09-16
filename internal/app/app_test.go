@@ -82,7 +82,7 @@ func TestMainHelpDescribesQuickStart(t *testing.T) {
 	help := out.String()
 	for _, want := range []string{
 		"gh git — repository-scoped GitHub identity",
-		"gh git bind <account>",
+		"gh git bind <github-username>",
 		"gh git shell-init bash",
 		"gh git doctor",
 		"Remote gh extension install requires a published CalVer Release",

@@ -21,15 +21,15 @@ Git の author と GitHub CLI の認証プロファイルをリポジトリ単�
 eval "$(gh git shell-init bash)"
 
 cd /path/to/repository
-gh git bind <account>
+gh git bind <github-username>
 gh git status
 ```
 
-`<account>` には `gh auth status` で確認できる GitHub ログイン名を指定する。
+`<github-username>` には `gh auth status` で確認できる GitHub ログイン名を指定する。
 GitHub Enterprise など別ホストを使うときは `--hostname <host>` を指定する。
 
 ```bash
-gh git bind <account> --hostname github.example.com
+gh git bind <github-username> --hostname github.example.com
 ```
 
 未インストールなら、公開済み拡張機能を次でインストールする。
@@ -48,7 +48,7 @@ gh extension install f4ah6o/gh-git
 
 | コマンド | 用途 |
 | --- | --- |
-| `gh git bind <account> [--hostname <host>]` | 現在のリポジトリをアカウントへ紐付け、Git author と認証用設定を生成する |
+| `gh git bind <github-username> [--hostname <host>]` | 現在のリポジトリを GitHub アカウントへ紐付け、Git author と認証用設定を生成する |
 | `gh git unbind` | 紐付けを解除し、最初の bind 前に保存したローカル author を復元する |
 | `gh git status [--json]` | 紐付け、author、Git 配線、プロファイル、資格情報の利用可否を秘密情報なしで表示する |
 | `gh git accounts [--hostname <host>]` | 保存済みアカウントを表示する。アクティブアカウントは変更しない |
@@ -100,7 +100,7 @@ token の値をリポジトリへ書き込むことはない。
 - Git HTTPS は `gh auth token --hostname <host> --user <account>` を内部で使い、token をメモリ上で Git の credential protocol に渡す。
 - GitHub CLI が OS keyring からアカウント別 credential を解決できない環境では、`gh git doctor` と `gh auth status` の結果を確認する。CI では短命の `GH_TOKEN` または `GITHUB_TOKEN` を通常の方法で注入する。
 - SSH の鍵生成、アップロード、`~/.ssh` の変更、remote URL の変更は行わない。
-- SSH remote をアカウント単位で選択するには、あらかじめ `github-<account>` という既存 alias を用意する。alias がなければ `status`/`doctor` の警告に従い、意図しない鍵で接続しない。
+- SSH remote をアカウント単位で選択するには、あらかじめ `github-<github-username>` という既存 alias を用意する。alias がなければ `status`/`doctor` の警告に従い、意図しない鍵で接続しない。
 
 例:
 
@@ -128,7 +128,7 @@ Host github-<github-username>
 
 ## 説明時の要点
 
-- 「アカウントを切り替える」は、ホスト全体の `gh auth switch` ではなく `gh git bind <account>` を指すと説明する。
+- 「アカウントを切り替える」は、ホスト全体の `gh auth switch` ではなく `gh git bind <github-username>` を指すと説明する。
 - `gh git -h` にはこの Skill と同じ基本導線（Usage、Commands、Quick start、安全上の注意）が表示されると説明する。
 - token の実値、環境変数の内容、生成ファイルの credential を出力例に含めない。
 - repository config は untrusted input として扱い、信頼できない worktree の bind や生成ファイルを無検証で受け入れない。
