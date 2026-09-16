@@ -81,16 +81,283 @@ func TestMainHelpDescribesQuickStart(t *testing.T) {
 	}
 	help := out.String()
 	for _, want := range []string{
-		"gh git — repository-scoped GitHub identity",
+		"gh git — Git with repository-scoped GitHub identity",
+		"gh git <git arguments...>",
+		"gh git status",
 		"gh git bind <github-username>",
+		"gh git binding status",
 		"gh git shell-init bash",
 		"gh git doctor",
 		"Remote gh extension install requires a published CalVer Release",
 		"never calls gh auth switch",
+		"does not add confirmation or reinterpret arguments",
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help does not contain %q:\n%s", want, help)
 		}
+	}
+}
+
+func TestGitPassthroughRepresentativeReadWriteCommands(t *testing.T) {
+	git, root := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	ctx := context.Background()
+
+	fileName := "file with space.txt"
+	filePath := filepath.Join(root, fileName)
+	if err := os.WriteFile(filePath, []byte("first\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := application.Run(ctx, []string{"add", "--", fileName}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git add: %v\nstderr: %s", err, errOut.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"status", "--short", "-z"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git status: %v\nstderr: %s", err, errOut.String())
+	}
+	if got, want := out.String(), "A  "+fileName+"\x00"; got != want {
+		t.Fatalf("status output = %q, want %q", got, want)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"commit", "-m", "test commit"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git commit: %v\nstderr: %s", err, errOut.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"log", "-1", "--format=%s"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git log: %v\nstderr: %s", err, errOut.String())
+	}
+	if got := strings.TrimSpace(out.String()); got != "test commit" {
+		t.Fatalf("commit subject = %q", got)
+	}
+
+	if err := os.WriteFile(filePath, []byte("second\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errOut.Reset()
+	err := application.Run(ctx, []string{"diff", "--exit-code", "--", fileName}, strings.NewReader(""))
+	if err == nil {
+		t.Fatal("gh git diff --exit-code unexpectedly succeeded")
+	}
+	if code, ok := ExitCode(err); !ok || code != 1 {
+		t.Fatalf("diff exit = (%d, %v), err = %v", code, ok, err)
+	}
+	if !strings.Contains(out.String(), "-first") || !strings.Contains(out.String(), "+second") {
+		t.Fatalf("diff output did not reach stdout: %q", out.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"rev-parse", "--is-inside-work-tree"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git rev-parse: %v\nstderr: %s", err, errOut.String())
+	}
+	if strings.TrimSpace(out.String()) != "true" {
+		t.Fatalf("rev-parse output = %q", out.String())
+	}
+}
+
+func TestGitPassthroughLocalRemotePushFetchPull(t *testing.T) {
+	git, root := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	ctx := context.Background()
+	run := func(args ...string) string {
+		t.Helper()
+		out.Reset()
+		errOut.Reset()
+		if err := application.Run(ctx, args, strings.NewReader("")); err != nil {
+			t.Fatalf("gh git %s: %v\nstderr: %s", strings.Join(args, " "), err, errOut.String())
+		}
+		return out.String()
+	}
+
+	tracked := filepath.Join(root, "tracked.txt")
+	if err := os.WriteFile(tracked, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "--", "tracked.txt")
+	run("commit", "-m", "initial")
+	run("branch", "-M", "main")
+
+	parent := filepath.Dir(root)
+	remote := filepath.Join(parent, "remote.git")
+	run("init", "--bare", "-q", remote)
+	run("remote", "add", "origin", remote)
+	run("push", "-u", "origin", "main")
+	run("--git-dir="+remote, "symbolic-ref", "HEAD", "refs/heads/main")
+
+	git.WorkDir = parent
+	run("clone", "-q", remote, "peer")
+	peer := filepath.Join(parent, "peer")
+	git.WorkDir = peer
+	run("config", "user.name", "Peer User")
+	run("config", "user.email", "peer@example.invalid")
+	if err := os.WriteFile(filepath.Join(peer, "tracked.txt"), []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "--", "tracked.txt")
+	run("commit", "-m", "peer update")
+	run("push", "origin", "main")
+	peerHead := strings.TrimSpace(run("rev-parse", "HEAD"))
+
+	git.WorkDir = root
+	localHead := strings.TrimSpace(run("rev-parse", "HEAD"))
+	run("fetch", "origin")
+	remoteHead := strings.TrimSpace(run("rev-parse", "origin/main"))
+	if localHead == remoteHead {
+		t.Fatalf("fetch did not expose a newer remote commit: local=%s remote=%s", localHead, remoteHead)
+	}
+	if remoteHead != peerHead {
+		t.Fatalf("origin/main = %s, peer HEAD = %s", remoteHead, peerHead)
+	}
+	run("pull", "--ff-only", "origin", "main")
+	if got := strings.TrimSpace(run("rev-parse", "HEAD")); got != peerHead {
+		t.Fatalf("HEAD after pull = %s, want %s", got, peerHead)
+	}
+}
+
+func TestGitPassthroughDashEscapeAndUnknownSubcommand(t *testing.T) {
+	git, _ := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	ctx := context.Background()
+
+	if err := application.Run(ctx, []string{"--", "status", "--short"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git -- status: %v\nstderr: %s", err, errOut.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("clean status output = %q", out.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	err := application.Run(ctx, []string{"definitely-not-a-git-command"}, strings.NewReader(""))
+	if err == nil {
+		t.Fatal("unknown git subcommand unexpectedly succeeded")
+	}
+	if code, ok := ExitCode(err); !ok || code == 0 {
+		t.Fatalf("unknown command exit = (%d, %v), err = %v", code, ok, err)
+	}
+	if errOut.Len() == 0 {
+		t.Fatal("git stderr was not forwarded")
+	}
+}
+
+func TestGitCredentialIsPassthroughUnlessManaged(t *testing.T) {
+	git, _ := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	input := "protocol=https\nhost=example.invalid\nusername=test-user\npassword=test-password\n\n"
+
+	if err := application.Run(context.Background(), []string{"credential", "fill"}, strings.NewReader(input)); err != nil {
+		t.Fatalf("gh git credential fill: %v\nstderr: %s", err, errOut.String())
+	}
+	for _, want := range []string{"protocol=https", "host=example.invalid", "username=test-user", "password=test-password"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("git credential output missing %q: %q", want, out.String())
+		}
+	}
+}
+
+func TestGitStatusAndInitUseGitWhileBindingStatusUsesGhGit(t *testing.T) {
+	git, root := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	ctx := context.Background()
+
+	if err := application.Run(ctx, []string{"binding", "status"}, strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, "Binding: unbound") {
+		t.Fatalf("binding status output = %q", got)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"status", "--short"}, strings.NewReader("")); err != nil {
+		t.Fatalf("git status: %v\nstderr: %s", err, errOut.String())
+	}
+	if strings.Contains(out.String(), "Binding:") {
+		t.Fatalf("git status was routed to gh-git diagnostics: %q", out.String())
+	}
+
+	parent := filepath.Dir(root)
+	git.WorkDir = parent
+	out.Reset()
+	errOut.Reset()
+	if err := application.Run(ctx, []string{"init", "-q", "initialized-by-gh-git"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git init: %v\nstderr: %s", err, errOut.String())
+	}
+	if _, err := os.Stat(filepath.Join(parent, "initialized-by-gh-git", ".git")); err != nil {
+		t.Fatalf("git init did not create repository: %v", err)
+	}
+}
+
+func TestGitPassthroughFetchPullPushAgainstLocalBareRemote(t *testing.T) {
+	ctx := context.Background()
+	remoteRoot := t.TempDir()
+	remote := filepath.Join(remoteRoot, "remote.git")
+	cmd := exec.Command("git", "init", "--bare", "-q", remote)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+
+	git1, root1 := newTestRepo(t, remote, "Writer One", "writer1@example.invalid")
+	app1, _, errOut1 := testApp(git1, fakeAuth{})
+	file1 := filepath.Join(root1, "shared.txt")
+	if err := os.WriteFile(file1, []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "--", "shared.txt"},
+		{"commit", "-m", "initial"},
+		{"push", "-u", "origin", "HEAD:main"},
+	} {
+		errOut1.Reset()
+		if err := app1.Run(ctx, args, strings.NewReader("")); err != nil {
+			t.Fatalf("gh git %v: %v\nstderr: %s", args, err, errOut1.String())
+		}
+	}
+
+	git2, root2 := newTestRepo(t, remote, "Writer Two", "writer2@example.invalid")
+	app2, _, errOut2 := testApp(git2, fakeAuth{})
+	for _, args := range [][]string{
+		{"fetch", "origin"},
+		{"switch", "-C", "main", "origin/main"},
+		{"branch", "--set-upstream-to=origin/main", "main"},
+	} {
+		errOut2.Reset()
+		if err := app2.Run(ctx, args, strings.NewReader("")); err != nil {
+			t.Fatalf("gh git %v: %v\nstderr: %s", args, err, errOut2.String())
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(root2, "shared.txt"))
+	if err != nil || string(data) != "one\n" {
+		t.Fatalf("fetched file = %q, err = %v", data, err)
+	}
+
+	if err := os.WriteFile(file1, []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"add", "--", "shared.txt"},
+		{"commit", "-m", "update"},
+		{"push", "origin", "HEAD:main"},
+	} {
+		errOut1.Reset()
+		if err := app1.Run(ctx, args, strings.NewReader("")); err != nil {
+			t.Fatalf("gh git %v: %v\nstderr: %s", args, err, errOut1.String())
+		}
+	}
+
+	errOut2.Reset()
+	if err := app2.Run(ctx, []string{"pull", "--ff-only"}, strings.NewReader("")); err != nil {
+		t.Fatalf("gh git pull --ff-only: %v\nstderr: %s", err, errOut2.String())
+	}
+	data, err = os.ReadFile(filepath.Join(root2, "shared.txt"))
+	if err != nil || string(data) != "two\n" {
+		t.Fatalf("pulled file = %q, err = %v", data, err)
 	}
 }
 
@@ -101,7 +368,7 @@ func TestBindCredentialAndUnbind(t *testing.T) {
 		tokens:   map[string]string{"github.com\x00github-username": "secret-token"},
 	}
 	application, out, _ := testApp(git, auth)
-	if err := application.Bind(context.Background(), "github-username", ""); err != nil {
+	if err := application.Run(context.Background(), []string{"bind", "github-username"}, strings.NewReader("")); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(out.String(), "secret-token") {
@@ -132,14 +399,14 @@ func TestBindCredentialAndUnbind(t *testing.T) {
 	}
 
 	application.Out = new(bytes.Buffer)
-	if err := application.Credential(context.Background(), "get", strings.NewReader("protocol=https\nhost=github.com\n\n")); err != nil {
+	if err := application.Run(context.Background(), []string{"credential", "--managed", "get"}, strings.NewReader("protocol=https\nhost=github.com\n\n")); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(application.Out.(*bytes.Buffer).String(), "password=secret-token") {
 		t.Fatal("credential helper did not return the token to Git")
 	}
 
-	if err := application.Unbind(context.Background()); err != nil {
+	if err := application.Run(context.Background(), []string{"unbind"}, strings.NewReader("")); err != nil {
 		t.Fatal(err)
 	}
 	nameValues, _ = git.LocalValues(context.Background(), root, "user.name")

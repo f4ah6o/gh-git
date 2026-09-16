@@ -1,8 +1,9 @@
 # gh-git
 
-`gh-git` binds a repository to one GitHub account. The binding controls the
-Git author and GitHub authentication without changing the global active
-account used by `gh auth switch`.
+`gh-git` runs ordinary Git commands as `gh git ...` and can bind a repository
+to one GitHub account. The binding controls the Git author and GitHub
+authentication without changing the global active account used by
+`gh auth switch`.
 
 ## Why this exists
 
@@ -66,16 +67,20 @@ without the hook.
 eval "$(gh git shell-init bash)"
 cd /path/to/repository
 gh git bind <github-username>
+gh git binding status
 ```
 
-After that, these commands select the bound account when run in the
-repository:
+After that, Git can be run through `gh git`; network operations use the
+repository binding where authentication is needed, while direct `gh` commands
+use the shell-selected profile:
 
 ```bash
-git fetch
-git pull
-git commit
-git push
+gh git status
+gh git fetch
+gh git pull --ff-only
+gh git add -- path/to/file
+gh git commit -m "message"
+gh git push
 gh pr create
 gh pr view
 gh issue create
@@ -92,23 +97,69 @@ and restores them on exit; it never writes their values to the repository.
 
 ## Commands
 
+Normal Git commands are forwarded to the real `git` executable without a
+shell. Arguments, standard input/output/error, current working directory,
+environment, and Git's exit status are preserved.
+
+```bash
+gh git status
+gh git fetch --prune
+gh git pull --ff-only
+gh git add -- path/to/file
+gh git commit -m "message"
+gh git push
+gh git diff --stat
+gh git log --oneline -10
+gh git show HEAD
+gh git branch -vv
+gh git switch -c feature/example
+gh git checkout -- path/to/file
+gh git merge topic
+gh git rebase main
+gh git tag --list
+gh git worktree list
+gh git remote -v
+gh git rev-parse HEAD
+gh git ls-files
+gh git grep pattern
+gh git restore path/to/file
+gh git reset HEAD -- path/to/file
+```
+
+Passthrough is generic rather than allow-listed. `gh git <arguments...>` has
+the same destructive capabilities as `git <arguments...>`; gh-git does not
+add confirmation, remove flags, or reinterpret Git semantics. Use an explicit
+separator when command routing needs to be unambiguous:
+
+```bash
+gh git -- status --short
+```
+
+Repository-binding management is available under the `binding` namespace:
+
 ```bash
 gh git bind <account> [--hostname <host>]
 gh git unbind
-gh git status
-gh git status --json
+gh git binding status
+gh git binding status --json
 gh git accounts
 gh git doctor
 gh git env
+gh git shell-init bash
 ```
 
 `bind` validates the requested account with `gh auth token --user` and reads
 its `/user` metadata through `gh api`; it never calls `gh auth switch`.
 
-`status` reports the binding, author, Git wiring, profile path, and whether the
-stored credential is available. It never prints a token. `accounts` reports
-account names and status from `gh auth status`, without the `--show-token`
-option.
+`gh git binding status` reports the binding, author, Git wiring, profile path,
+and whether the stored credential is available. It never prints a token.
+`accounts` reports account names and status from `gh auth status`, without the
+`--show-token` option.
+
+For compatibility, `bind`, `unbind`, `accounts`, `doctor`, `env`, and
+`shell-init` remain available as top-level gh-git commands. `status` and
+`init` intentionally belong to Git itself, so use `gh git binding status` for
+gh-git's diagnostic status.
 
 `unbind` removes gh-git's generated wiring and restores the local author
 values that existed before the first bind. If a user changed a managed value
@@ -183,7 +234,7 @@ Host github-<github-username>
 
 `bind` adds a repository-local Git URL rewrite, leaving the visible remote as
 `git@github.com:owner/repo.git` while SSH connects through the existing alias.
-If the alias is absent, `status`/`doctor` reports that canonical SSH cannot
+If the alias is absent, `binding status`/`doctor` reports that canonical SSH cannot
 select an account per repository; add and verify the alias yourself, then
 bind again. This avoids silently using the wrong SSH key.
 

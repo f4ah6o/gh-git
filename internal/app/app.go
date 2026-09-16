@@ -50,8 +50,58 @@ func New(out, errOut io.Writer) *App {
 }
 
 func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || (args[0] == "help" && len(args) == 1) {
 		return a.printMainHelp()
+	}
+	if args[0] == "--" {
+		return a.RunGit(ctx, args[1:], input)
+	}
+	if args[0] == "binding" {
+		return a.runBindingCommand(ctx, args[1:], input)
+	}
+
+	switch args[0] {
+	case "bind":
+		return a.runBindingCommand(ctx, args, input)
+	case "unbind":
+		return a.runBindingCommand(ctx, args, input)
+	case "accounts":
+		return a.runBindingCommand(ctx, args, input)
+	case "doctor":
+		return a.runBindingCommand(ctx, args, input)
+	case "env":
+		return a.runBindingCommand(ctx, args, input)
+	case "shell-init":
+		return a.runBindingCommand(ctx, args, input)
+	case "credential":
+		operation, err := parseCredentialArgs(args[1:])
+		if err == nil {
+			return a.Credential(ctx, operation, input)
+		}
+		return a.RunGit(ctx, args, input)
+	default:
+		return a.RunGit(ctx, args, input)
+	}
+}
+
+func (a *App) runBindingCommand(ctx context.Context, args []string, input io.Reader) error {
+	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
+		_, err := io.WriteString(a.Out, `gh git binding — repository-scoped GitHub identity management
+
+Usage:
+  gh git binding bind <github-username> [--hostname <host>]
+  gh git binding unbind
+  gh git binding status [--json]
+  gh git binding accounts [--hostname <host>]
+  gh git binding doctor
+  gh git binding env [--shell <bash|zsh|fish>]
+  gh git binding shell-init <bash|zsh|fish>
+
+The top-level bind, unbind, accounts, doctor, env, and shell-init aliases remain
+available for compatibility. 'gh git status' and 'gh git init' are real Git
+commands; use 'gh git binding status' for gh-git's own binding diagnostics.
+`)
+		return err
 	}
 
 	switch args[0] {
@@ -63,7 +113,7 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		return a.Bind(ctx, account, host)
 	case "unbind":
 		if len(args) != 1 {
-			return errors.New("usage: gh git unbind")
+			return errors.New("usage: gh git binding unbind")
 		}
 		return a.Unbind(ctx)
 	case "status":
@@ -80,7 +130,7 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		return a.Accounts(ctx, host)
 	case "doctor":
 		if len(args) != 1 {
-			return errors.New("usage: gh git doctor")
+			return errors.New("usage: gh git binding doctor")
 		}
 		return a.Doctor(ctx)
 	case "env":
@@ -91,7 +141,7 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		return a.Env(ctx, shellName)
 	case "shell-init":
 		if len(args) != 2 {
-			return errors.New("usage: gh git shell-init <bash|zsh|fish>")
+			return errors.New("usage: gh git binding shell-init <bash|zsh|fish>")
 		}
 		value, err := shell.Init(args[1])
 		if err != nil {
@@ -99,37 +149,44 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		}
 		_, err = io.WriteString(a.Out, value)
 		return err
-	case "credential":
-		operation, err := parseCredentialArgs(args[1:])
-		if err != nil {
-			return err
-		}
-		return a.Credential(ctx, operation, input)
-	case "init":
-		return a.InitHelp()
 	default:
-		return fmt.Errorf("unknown command %q; run `gh git --help`", args[0])
+		return fmt.Errorf("unknown binding command %q; run `gh git binding --help`", args[0])
 	}
 }
 
 func (a *App) printMainHelp() error {
-	_, err := io.WriteString(a.Out, `gh git — repository-scoped GitHub identity
+	_, err := io.WriteString(a.Out, `gh git — Git with repository-scoped GitHub identity
 
-Bind a repository to one GitHub account without changing gh's global active account.
+Run normal Git commands through the gh extension while keeping repository-scoped
+GitHub identity/authentication available. Git arguments are forwarded without a shell.
 
 Usage:
+  gh git <git arguments...>
+  gh git -- <git arguments...>
   gh git bind <github-username> [--hostname <host>]
   gh git unbind
-  gh git status [--json]
+  gh git binding status [--json]
   gh git accounts [--hostname <host>]
   gh git doctor
   gh git env [--shell <bash|zsh|fish>]
   gh git shell-init <bash|zsh|fish>
 
-Commands:
+Git passthrough examples:
+  gh git status
+  gh git fetch --prune
+  gh git pull --ff-only
+  gh git add -- path/to/file
+  gh git commit -m "message"
+  gh git push
+  gh git diff --stat
+  gh git log --oneline -10
+  gh git switch -c feature/example
+  gh git worktree list
+
+gh-git management:
   bind         Bind this repository to one GitHub account.
   unbind       Remove gh-git's binding and restore prior local author values.
-  status       Show binding and authentication wiring without secrets.
+  binding      Management namespace. Use 'gh git binding status' for diagnostics.
   accounts     List stored GitHub accounts without changing the active account.
   doctor       Explain missing or unsafe pieces of a binding.
   env          Print the tokenless GH_CONFIG_DIR profile for this repository.
@@ -139,6 +196,7 @@ Quick start:
   eval "$(gh git shell-init bash)"  # run once per bash shell
   cd /path/to/repository
   gh git bind <github-username>
+  gh git binding status
   gh git status
 
 Use zsh or fish instead of bash for those shells. The shell hook is
@@ -152,15 +210,12 @@ Installation:
 Safety:
   - gh-git never calls gh auth switch.
   - Tokens stay in gh's secure credential store and are never written to the repository.
-  - Run gh git doctor when status reports a missing or unsafe setup.
+  - Git passthrough preserves Git's own behavior, including destructive flags; gh-git
+    does not add confirmation or reinterpret arguments.
+  - Run gh git doctor when binding status reports a missing or unsafe setup.
 
-The hidden credential command is called by Git's repository-local helper.
+The hidden 'credential --managed' command is called by Git's repository-local helper.
 `)
-	return err
-}
-
-func (a *App) InitHelp() error {
-	_, err := io.WriteString(a.Out, "gh git init is intentionally not automatic; source `eval \"$(gh git shell-init bash)\"` once, then run `gh git bind <github-username>` in a repository.\n")
 	return err
 }
 
@@ -227,7 +282,7 @@ func parseJSONFlag(args []string) (bool, error) {
 	if len(args) == 1 && args[0] == "--json" {
 		return true, nil
 	}
-	return false, fmt.Errorf("usage: gh git status [--json]")
+	return false, fmt.Errorf("usage: gh git binding status [--json]")
 }
 
 func parseShellFlag(args []string) (string, error) {
@@ -244,9 +299,6 @@ func parseShellFlag(args []string) (string, error) {
 }
 
 func parseCredentialArgs(args []string) (string, error) {
-	if len(args) == 1 && (args[0] == "get" || args[0] == "store" || args[0] == "erase") {
-		return args[0], nil
-	}
 	if len(args) == 2 && args[0] == "--managed" && (args[1] == "get" || args[1] == "store" || args[1] == "erase") {
 		return args[1], nil
 	}
