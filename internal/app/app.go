@@ -115,6 +115,8 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 func (a *App) printMainHelp() error {
 	_, err := io.WriteString(a.Out, `gh git — repository-scoped GitHub identity
 
+Bind a repository to one GitHub account without changing gh's global active account.
+
 Usage:
   gh git bind <account> [--hostname <host>]
   gh git unbind
@@ -132,6 +134,25 @@ Commands:
   doctor       Explain missing or unsafe pieces of a binding.
   env          Print the tokenless GH_CONFIG_DIR profile for this repository.
   shell-init   Print an optional cd/prompt hook for direct gh invocations.
+
+Quick start:
+  eval "$(gh git shell-init bash)"  # run once per bash shell
+  cd /path/to/repository
+  gh git bind <account>
+  gh git status
+
+Use zsh or fish instead of bash for those shells. The shell hook is
+needed for direct commands such as gh pr create and gh api user.
+Git HTTPS commands use the repository-local credential helper automatically.
+
+Installation:
+  - Remote gh extension install requires a published CalVer Release with platform binaries.
+  - For local development, build ./gh-git or install from the local repository after building it.
+
+Safety:
+  - gh-git never calls gh auth switch.
+  - Tokens stay in gh's secure credential store and are never written to the repository.
+  - Run gh git doctor when status reports a missing or unsafe setup.
 
 The hidden credential command is called by Git's repository-local helper.
 `)

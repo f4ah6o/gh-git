@@ -33,6 +33,20 @@ From a published extension repository:
 gh extension install f4ah6o/gh-git
 ```
 
+The remote install uses precompiled binaries attached to the latest GitHub
+CalVer Release. A source-only repository cannot be installed by `gh extension install`;
+run `.github/workflows/release.yml` to allocate a CalVer tag and publish the
+platform-specific assets first. Releases use `YYYY.MM.PATCH` in the
+`Asia/Tokyo` timezone, for example `2026.9.0`.
+
+```bash
+git tag -f latest
+git push -f origin latest
+```
+
+The workflow can also be started from the GitHub Actions UI with
+`workflow_dispatch`.
+
 When developing locally:
 
 ```bash

@@ -1,0 +1,4 @@
+interface:
+  display_name: "gh-git"
+  short_description: "Repository-scoped GitHub account guide"
+  default_prompt: "Use $gh-git to explain or troubleshoot repository-scoped GitHub account binding."

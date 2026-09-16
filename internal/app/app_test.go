@@ -74,6 +74,26 @@ func testApp(git *gitconfig.Client, auth Auth) (*App, *bytes.Buffer, *bytes.Buff
 	return &App{Git: git, Auth: auth, Out: &out, Err: &errOut}, &out, &errOut
 }
 
+func TestMainHelpDescribesQuickStart(t *testing.T) {
+	application, out, _ := testApp(gitconfig.New(), fakeAuth{})
+	if err := application.Run(context.Background(), []string{"-h"}, strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
+	help := out.String()
+	for _, want := range []string{
+		"gh git — repository-scoped GitHub identity",
+		"gh git bind <account>",
+		"gh git shell-init bash",
+		"gh git doctor",
+		"Remote gh extension install requires a published CalVer Release",
+		"never calls gh auth switch",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help does not contain %q:\n%s", want, help)
+		}
+	}
+}
+
 func TestBindCredentialAndUnbind(t *testing.T) {
 	git, root := newTestRepo(t, "https://github.com/example/gh-git.git", "prior name", "prior@example.invalid")
 	auth := fakeAuth{

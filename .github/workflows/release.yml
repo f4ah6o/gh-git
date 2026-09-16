@@ -1,0 +1,35 @@
+name: release
+
+on:
+  push:
+    tags:
+      - latest
+  workflow_dispatch:
+
+concurrency:
+  group: gh-git-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Allocate CalVer release tag
+        id: calver
+        uses: f4ah6o/calver-action@d52d460544cb0174c02020dcfae3f73b334fb3a8
+        with:
+          format: YYYY.MM.PATCH
+          timezone: Asia/Tokyo
+          create_tag: true
+
+      - uses: cli/gh-extension-precompile@v2
+        with:
+          go_version_file: go.mod
+          release_tag: ${{ steps.calver.outputs.tag }}
