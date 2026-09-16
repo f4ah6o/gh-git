@@ -1,6 +1,6 @@
 # `gh git --version` で gh-git 自身のバージョンを表示する
 
-Status: open
+Status: done
 Model: gpt-5.6-sol
 Created: 2026-09-16
 Updated: 2026-09-16
@@ -32,14 +32,22 @@ Branch: main
 
 ## 受け入れ条件
 
-- [ ] `gh git --version` が exit code 0 で gh-git 自身のバージョンを単一行表示する。
-- [ ] `gh git version` が実 Git に passthrough されることをテストで固定する。
-- [ ] `gh git -- --version` が実 Git に passthrough されることをテストで固定する。
-- [ ] `--help` / `-h` と既存 management command routing に回帰がない。
-- [ ] release build では release/version 情報を表示できる。
-- [ ] release 情報が注入されないローカル build でも、誤解を招く偽の release version を表示しない。
-- [ ] main help / README / Skill の必要箇所に `--version` の契約を反映する。
-- [ ] repository の既存テストを実行し PASS を確認する。
+- [x] `gh git --version` が exit code 0 で gh-git 自身のバージョンを単一行表示する。
+- [x] `gh git version` が実 Git に passthrough されることをテストで固定する。
+- [x] `gh git -- --version` が実 Git に passthrough されることをテストで固定する。
+- [x] `--help` / `-h` と既存 management command routing に回帰がない。
+- [x] release build では release/version 情報を表示できる。
+- [x] release 情報が注入されないローカル build でも、誤解を招く偽の release version を表示しない。
+- [x] main help / README / Skill の必要箇所に `--version` の契約を反映する。
+- [x] repository の既存テストを実行し PASS を確認する。
+
+## 完了実績
+
+- 実装 commit: `9517002` (`feat: add gh-git version flag`)
+- 公開 release: `2026.9.4`
+- release tag target: `f6c665c0097b859535c44ae1daaa107801d56afb`
+- release 検証: tag SHA 一致、非 draft、非 prerelease、12 platform asset 全件 uploaded / size > 0 を確認済み。
+- release 相当 build で `gh-git 2026.9.4` を確認済み。
 
 ## 非目標
 
