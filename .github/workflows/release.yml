@@ -33,3 +33,4 @@ jobs:
         with:
           go_version_file: go.mod
           release_tag: ${{ steps.calver.outputs.tag }}
+          go_build_options: '-ldflags=-s -w -X=main.version=${{ steps.calver.outputs.tag }}'

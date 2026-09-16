@@ -97,6 +97,16 @@ and restores them on exit; it never writes their values to the repository.
 
 ## Commands
 
+Print the gh-git extension version with:
+
+```bash
+gh git --version
+```
+
+`gh git version` remains a normal Git passthrough and therefore runs
+`git version`. Use `gh git -- --version` when you explicitly want Git's
+global `--version` flag.
+
 Normal Git commands are forwarded to the real `git` executable without a
 shell. Arguments, standard input/output/error, current working directory,
 environment, and Git's exit status are preserved.

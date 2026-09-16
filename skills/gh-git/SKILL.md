@@ -49,6 +49,7 @@ gh extension install f4ah6o/gh-git
 
 | コマンド | 用途 |
 | --- | --- |
+| `gh git --version` | gh-git 自身のバージョンを表示する |
 | `gh git <git arguments...>` | 引数を shell で再解釈せず、実際の `git` へ委譲する。stdio、cwd、env、exit code を維持する |
 | `gh git -- <git arguments...>` | gh-git 側のコマンド名との曖昧さを避けて Git に明示委譲する |
 | `gh git bind <github-username> [--hostname <host>]` | 現在のリポジトリを GitHub アカウントへ紐付け、Git author と認証用設定を生成する |
@@ -60,6 +61,8 @@ gh extension install f4ah6o/gh-git
 | `gh git shell-init <bash\|zsh\|fish>` | ディレクトリ移動時にプロファイルを選ぶ shell hook を出力する |
 
 `credential --managed` は Git の repository-local credential helper から呼ばれる内部コマンドであり、通常は直接実行しない。それ以外の `gh git credential ...` は実 Git に委譲する。
+
+`gh git version` は管理サブコマンドとして予約せず、実 Git の `git version` に委譲する。Git の global `--version` を明示的に使う場合は `gh git -- --version` とする。
 
 `status` と `init` は Git 本来のサブコマンドとして扱う。gh-git 自身の状態確認は `gh git binding status` を使う。
 `bind`、`unbind`、`accounts`、`doctor`、`env`、`shell-init` は互換性のためトップレベル管理コマンドとして維持する。

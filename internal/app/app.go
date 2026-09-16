@@ -34,24 +34,29 @@ type Auth interface {
 }
 
 type App struct {
-	Git  *gitconfig.Client
-	Auth Auth
-	Out  io.Writer
-	Err  io.Writer
+	Git     *gitconfig.Client
+	Auth    Auth
+	Out     io.Writer
+	Err     io.Writer
+	Version string
 }
 
 func New(out, errOut io.Writer) *App {
 	return &App{
-		Git:  gitconfig.New(),
-		Auth: ghauth.New(),
-		Out:  out,
-		Err:  errOut,
+		Git:     gitconfig.New(),
+		Auth:    ghauth.New(),
+		Out:     out,
+		Err:     errOut,
+		Version: "devel",
 	}
 }
 
 func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || (args[0] == "help" && len(args) == 1) {
 		return a.printMainHelp()
+	}
+	if args[0] == "--version" {
+		return a.printVersion()
 	}
 	if args[0] == "--" {
 		return a.RunGit(ctx, args[1:], input)
@@ -161,6 +166,7 @@ Run normal Git commands through the gh extension while keeping repository-scoped
 GitHub identity/authentication available. Git arguments are forwarded without a shell.
 
 Usage:
+  gh git --version
   gh git <git arguments...>
   gh git -- <git arguments...>
   gh git bind <github-username> [--hostname <host>]
@@ -184,6 +190,7 @@ Git passthrough examples:
   gh git worktree list
 
 gh-git management:
+  --version    Print the gh-git version.
   bind         Bind this repository to one GitHub account.
   unbind       Remove gh-git's binding and restore prior local author values.
   binding      Management namespace. Use 'gh git binding status' for diagnostics.
@@ -216,6 +223,15 @@ Safety:
 
 The hidden 'credential --managed' command is called by Git's repository-local helper.
 `)
+	return err
+}
+
+func (a *App) printVersion() error {
+	version := strings.TrimSpace(a.Version)
+	if version == "" {
+		version = "devel"
+	}
+	_, err := fmt.Fprintf(a.Out, "gh-git %s\n", version)
 	return err
 }
 

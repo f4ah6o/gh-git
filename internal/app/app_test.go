@@ -82,6 +82,7 @@ func TestMainHelpDescribesQuickStart(t *testing.T) {
 	help := out.String()
 	for _, want := range []string{
 		"gh git — Git with repository-scoped GitHub identity",
+		"gh git --version",
 		"gh git <git arguments...>",
 		"gh git status",
 		"gh git bind <github-username>",
@@ -94,6 +95,44 @@ func TestMainHelpDescribesQuickStart(t *testing.T) {
 	} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help does not contain %q:\n%s", want, help)
+		}
+	}
+}
+
+func TestVersionFlagPrintsGhGitVersion(t *testing.T) {
+	application, out, _ := testApp(gitconfig.New(), fakeAuth{})
+	application.Version = "2026.9.16"
+	if err := application.Run(context.Background(), []string{"--version"}, strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "gh-git 2026.9.16\n"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
+	}
+}
+
+func TestVersionFlagFallsBackToDevelopmentVersion(t *testing.T) {
+	application, out, _ := testApp(gitconfig.New(), fakeAuth{})
+	if err := application.Run(context.Background(), []string{"--version"}, strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := out.String(), "gh-git devel\n"; got != want {
+		t.Fatalf("version output = %q, want %q", got, want)
+	}
+}
+
+func TestVersionSubcommandAndDashVersionUseGit(t *testing.T) {
+	git, _ := newTestRepo(t, "", "Test User", "test@example.invalid")
+	application, out, errOut := testApp(git, fakeAuth{})
+	ctx := context.Background()
+
+	for _, args := range [][]string{{"version"}, {"--", "--version"}} {
+		out.Reset()
+		errOut.Reset()
+		if err := application.Run(ctx, args, strings.NewReader("")); err != nil {
+			t.Fatalf("gh git %s: %v\nstderr: %s", strings.Join(args, " "), err, errOut.String())
+		}
+		if got := out.String(); !strings.HasPrefix(got, "git version ") {
+			t.Fatalf("gh git %s output = %q, want git version output", strings.Join(args, " "), got)
 		}
 	}
 }
