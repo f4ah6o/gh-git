@@ -1,0 +1,55 @@
+name: verify release 2026.9.3
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify published release and assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_TAG: 2026.9.3
+          EXPECTED_SHA: 486b8082b1202ac2a5f7d3f66a502392305bb4c3
+        run: |
+          set -euo pipefail
+
+          expected_assets='["darwin-amd64","darwin-arm64","freebsd-386","freebsd-amd64","freebsd-arm64","linux-386","linux-amd64","linux-arm","linux-arm64","windows-386.exe","windows-amd64.exe","windows-arm64.exe"]'
+          status=fail
+
+          for attempt in $(seq 1 30); do
+            release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${EXPECTED_TAG}" 2>/dev/null || true)"
+            if [ -n "$release_json" ]; then
+              tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${EXPECTED_TAG}" --jq '.object.sha' 2>/dev/null || true)"
+              if jq -e \
+                --arg tag "$EXPECTED_TAG" \
+                --argjson expected "$expected_assets" \
+                '.tag_name == $tag
+                 and .draft == false
+                 and .prerelease == false
+                 and ([.assets[].name] | sort) == ($expected | sort)
+                 and ([.assets[] | select(.state != "uploaded" or .size <= 0)] | length) == 0' \
+                >/dev/null <<<"$release_json" \
+                && [ "$tag_sha" = "$EXPECTED_SHA" ]; then
+                status=ok
+                break
+              fi
+            fi
+            sleep 10
+          done
+
+          marker="release-verify-${EXPECTED_TAG}-${status}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/heads/${marker}" \
+            -f "sha=${EXPECTED_SHA}"
+
+          if [ "$status" != ok ]; then
+            echo "release verification failed" >&2
+            exit 1
+          fi
