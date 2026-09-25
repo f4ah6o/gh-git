@@ -118,19 +118,19 @@ func (c *Client) Root(ctx context.Context) (string, error) {
 }
 
 func (c *Client) Paths(ctx context.Context, root string) (Paths, error) {
-	out, err := c.run(ctx, root, []string{"rev-parse", "--git-path", "config"}, nil)
+	out, err := c.run(ctx, root, []string{"rev-parse", "--git-common-dir"}, nil)
 	if err != nil {
-		return Paths{}, fmt.Errorf("find Git config: %w", err)
+		return Paths{}, fmt.Errorf("find Git common dir: %w", err)
 	}
-	configPath := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(configPath) {
-		configPath = filepath.Join(root, configPath)
+	configDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(configDir) {
+		configDir = filepath.Join(root, configDir)
 	}
-	configPath, err = filepath.Abs(configPath)
+	configDir, err = filepath.Abs(configDir)
 	if err != nil {
-		return Paths{}, fmt.Errorf("resolve Git config path: %w", err)
+		return Paths{}, fmt.Errorf("resolve Git common dir: %w", err)
 	}
-	configDir := filepath.Dir(configPath)
+	configPath := filepath.Join(configDir, "config")
 	generatedDir := filepath.Join(configDir, "gh-git")
 	profileDir := filepath.Join(generatedDir, "gh-config")
 	return Paths{

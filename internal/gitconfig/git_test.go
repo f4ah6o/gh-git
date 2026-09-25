@@ -37,6 +37,47 @@ func TestLocalConfigDoesNotUseGlobalAuthor(t *testing.T) {
 	}
 }
 
+func TestPathsResolveToCommonGitDirInLinkedWorktree(t *testing.T) {
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, "repo")
+	worktree := filepath.Join(tmp, "worktree")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := append(os.Environ(), "HOME="+tmp, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+filepath.Join(tmp, "global.gitconfig"))
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run(root, "init", "-q")
+	run(root, "-c", "user.name=test", "-c", "user.email=test@example.invalid", "commit", "-qm", "init", "--allow-empty")
+	run(root, "worktree", "add", "-q", worktree)
+
+	git := New()
+	git.WorkDir = worktree
+	git.Env = env
+
+	mainPaths, err := git.Paths(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worktreePaths, err := git.Paths(context.Background(), worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commonDir := filepath.Join(root, ".git")
+	if worktreePaths.ConfigDir != commonDir || worktreePaths.ProfileDir != filepath.Join(commonDir, "gh-git", "gh-config") {
+		t.Fatalf("linked worktree paths = %#v", worktreePaths)
+	}
+	if mainPaths.ConfigDir != worktreePaths.ConfigDir || mainPaths.ProfileDir != worktreePaths.ProfileDir {
+		t.Fatalf("paths diverge: main = %#v, worktree = %#v", mainPaths, worktreePaths)
+	}
+}
+
 func TestRemotes(t *testing.T) {
 	tmp := t.TempDir()
 	root := filepath.Join(tmp, "repo")

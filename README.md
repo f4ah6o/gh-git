@@ -90,7 +90,8 @@ gh api user
 
 Use `zsh` or `fish` in place of `bash` where appropriate. The hook changes
 `GH_CONFIG_DIR` only while the shell is inside a bound repository and restores
-the previous value when it leaves. Because GitHub CLI gives `GH_TOKEN` and
+the previous value when it leaves. The profile resolves through the
+repository's common Git directory, so linked worktrees share the same binding. Because GitHub CLI gives `GH_TOKEN` and
 `GITHUB_TOKEN` precedence over stored credentials, the hook temporarily
 unsets the four GitHub token environment variables inside a bound repository
 and restores them on exit; it never writes their values to the repository.

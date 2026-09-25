@@ -20,14 +20,14 @@ func Init(name string) (string, error) {
 
 const bash = `# gh-git shell integration. Source once from ~/.bashrc.
 gh_git_apply() {
-  local gh_git_profile gh_git_root
-  gh_git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || gh_git_root=""
+  local gh_git_profile gh_git_common
+  gh_git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || gh_git_common=""
+  if [[ -n "$gh_git_common" ]]; then
+    gh_git_common="$(cd "$gh_git_common" 2>/dev/null && pwd)"
+  fi
   gh_git_profile=""
-  if [[ -n "$gh_git_root" ]]; then
-    gh_git_profile="$(git rev-parse --git-path gh-git/gh-config 2>/dev/null)"
-    if [[ -n "$gh_git_profile" && "$gh_git_profile" != /* ]]; then
-      gh_git_profile="$gh_git_root/$gh_git_profile"
-    fi
+  if [[ -n "$gh_git_common" ]]; then
+    gh_git_profile="$gh_git_common/gh-git/gh-config"
   fi
   if [[ -n "$gh_git_profile" && -f "$gh_git_profile/.gh-git-profile" ]]; then
     if [[ -z "${GH_GIT_SAVED_AUTH_ENV_SET+x}" ]]; then
@@ -70,14 +70,14 @@ gh_git_apply
 
 const zsh = `# gh-git shell integration. Source once from ~/.zshrc.
 gh_git_apply() {
-  local gh_git_profile gh_git_root
-  gh_git_root="$(git rev-parse --show-toplevel 2>/dev/null)" || gh_git_root=""
+  local gh_git_profile gh_git_common
+  gh_git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || gh_git_common=""
+  if [[ -n "$gh_git_common" ]]; then
+    gh_git_common="$(cd "$gh_git_common" 2>/dev/null && pwd)"
+  fi
   gh_git_profile=""
-  if [[ -n "$gh_git_root" ]]; then
-    gh_git_profile="$(git rev-parse --git-path gh-git/gh-config 2>/dev/null)"
-    if [[ -n "$gh_git_profile" && "$gh_git_profile" != /* ]]; then
-      gh_git_profile="$gh_git_root/$gh_git_profile"
-    fi
+  if [[ -n "$gh_git_common" ]]; then
+    gh_git_profile="$gh_git_common/gh-git/gh-config"
   fi
   if [[ -n "$gh_git_profile" && -f "$gh_git_profile/.gh-git-profile" ]]; then
     if [[ -z "${GH_GIT_SAVED_AUTH_ENV_SET+x}" ]]; then
@@ -121,13 +121,13 @@ gh_git_apply
 
 const fish = `# gh-git shell integration. Source from ~/.config/fish/config.fish.
 function gh_git_apply --on-variable PWD
-    set -l gh_git_root (git rev-parse --show-toplevel 2>/dev/null)
+    set -l gh_git_common (git rev-parse --git-common-dir 2>/dev/null)
+    if test -n "$gh_git_common"
+        set gh_git_common (cd "$gh_git_common" 2>/dev/null; and pwd)
+    end
     set -l gh_git_profile
-    if test -n "$gh_git_root"
-        set gh_git_profile (git rev-parse --git-path gh-git/gh-config 2>/dev/null)
-        if test -n "$gh_git_profile"; and not string match -q '/*' -- "$gh_git_profile"
-            set gh_git_profile "$gh_git_root/$gh_git_profile"
-        end
+    if test -n "$gh_git_common"
+        set gh_git_profile "$gh_git_common/gh-git/gh-config"
     end
     if test -n "$gh_git_profile"; and test -f "$gh_git_profile/.gh-git-profile"
         if not set -q GH_GIT_SAVED_AUTH_ENV_SET
