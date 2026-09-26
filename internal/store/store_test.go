@@ -11,10 +11,10 @@ import (
 
 func TestParseRepositoryNormalizesCommonForms(t *testing.T) {
 	cases := map[string]Repository{
-		"f4ah6o/example":                         {Host: "github.com", Owner: "f4ah6o", Name: "example"},
-		"github.com/f4ah6o/example":              {Host: "github.com", Owner: "f4ah6o", Name: "example"},
-		"https://github.com/f4ah6o/example.git":  {Host: "github.com", Owner: "f4ah6o", Name: "example"},
-		"git@github.com:f4ah6o/example.git":      {Host: "github.com", Owner: "f4ah6o", Name: "example"},
+		"f4ah6o/example":                          {Host: "github.com", Owner: "f4ah6o", Name: "example"},
+		"github.com/f4ah6o/example":               {Host: "github.com", Owner: "f4ah6o", Name: "example"},
+		"https://github.com/f4ah6o/example.git":   {Host: "github.com", Owner: "f4ah6o", Name: "example"},
+		"git@github.com:f4ah6o/example.git":       {Host: "github.com", Owner: "f4ah6o", Name: "example"},
 		"ssh://git@github.com/f4ah6o/example.git": {Host: "github.com", Owner: "f4ah6o", Name: "example"},
 	}
 	for input, want := range cases {
