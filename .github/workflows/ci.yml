@@ -19,7 +19,7 @@ jobs:
         run: |
           files="$(gofmt -l .)"
           printf '%s\\n' "$files"
-          test -z "$files"
+          if [ -n "$files" ]; then gofmt -d $files; exit 1; fi
       - name: test
         run: go test ./...
       - name: vet
