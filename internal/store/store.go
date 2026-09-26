@@ -17,8 +17,8 @@ import (
 
 const (
 	SchemaVersion = 1
-	fetchRefspec   = "+refs/heads/*:refs/remotes/origin/*"
-	metadataName   = "gh-git/store.json"
+	fetchRefspec  = "+refs/heads/*:refs/remotes/origin/*"
+	metadataName  = "gh-git/store.json"
 )
 
 type Repository struct {
