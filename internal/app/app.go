@@ -78,6 +78,8 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		return a.runBindingCommand(ctx, args, input)
 	case "shell-init":
 		return a.runBindingCommand(ctx, args, input)
+	case "store":
+		return a.runStoreCommand(ctx, args[1:])
 	case "credential":
 		operation, err := parseCredentialArgs(args[1:])
 		if err == nil {
@@ -176,6 +178,7 @@ Usage:
   gh git doctor
   gh git env [--shell <bash|zsh|fish>]
   gh git shell-init <bash|zsh|fish>
+  gh git store <ensure|inspect|fetch> <owner/repo|repository-url> [--json]
 
 Git passthrough examples:
   gh git status
@@ -198,6 +201,7 @@ gh-git management:
   doctor       Explain missing or unsafe pieces of a binding.
   env          Print the tokenless GH_CONFIG_DIR profile for this repository.
   shell-init   Print an optional cd/prompt hook for direct gh invocations.
+  store        Ensure, inspect, or fetch a bare repository substrate.
 
 Quick start:
   eval "$(gh git shell-init bash)"  # run once per bash shell
