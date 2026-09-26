@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -32,6 +33,25 @@ func TestParseRepositoryRejectsAmbiguousAndUnsafeInputs(t *testing.T) {
 	for _, input := range []string{"example", "../example", "owner/../repo", "https://github.com/owner/../repo"} {
 		if _, err := ParseRepository(input); err == nil {
 			t.Fatalf("ParseRepository(%q) unexpectedly succeeded", input)
+		}
+	}
+}
+
+
+func TestManagerRemoteURLDefaultsToCanonicalURL(t *testing.T) {
+	repo := Repository{Host: "github.com", Owner: "f4ah6o", Name: "example"}
+	manager := New(t.TempDir())
+	if got, want := manager.remoteURL(repo), "https://github.com/f4ah6o/example.git"; got != want {
+		t.Fatalf("remote URL = %q, want %q", got, want)
+	}
+}
+
+func TestRedactRemovesCredentials(t *testing.T) {
+	input := "Authorization: Bearer secret-token\nhttps://user:password@github.com/example/repo.git\ntoken=another-secret"
+	got := redact(input)
+	for _, secret := range []string{"secret-token", "password@github.com", "another-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("redacted output leaked %q: %q", secret, got)
 		}
 	}
 }
