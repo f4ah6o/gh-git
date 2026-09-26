@@ -16,7 +16,10 @@ jobs:
         with:
           go-version-file: go.mod
       - name: gofmt
-        run: test -z "$(gofmt -l .)"
+        run: |
+          files="$(gofmt -l .)"
+          printf '%s\\n' "$files"
+          test -z "$files"
       - name: test
         run: go test ./...
       - name: vet
