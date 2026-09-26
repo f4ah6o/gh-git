@@ -91,6 +91,13 @@ func TestEnsureFetchAndFailedFetchPreserveLastObservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	storePath := result.Store.Path
+	reused, err := manager.Ensure(ctx, repo)
+	if err != nil {
+		t.Fatalf("idempotent ensure: %v", err)
+	}
+	if reused.Store.Path != storePath {
+		t.Fatalf("idempotent ensure changed store path: %q != %q", reused.Store.Path, storePath)
+	}
 	result, err = manager.Fetch(ctx, repo)
 	if err != nil {
 		t.Fatal(err)
@@ -123,6 +130,26 @@ func TestEnsureFetchAndFailedFetchPreserveLastObservation(t *testing.T) {
 		t.Fatal("remote-tracking observation did not advance")
 	}
 	successAt := result.Fetch.LastSuccessAt
+
+	run(t, writer, "git", "push", "--quiet", "origin", "HEAD:topic")
+	manager.Now = func() time.Time { return time.Date(2026, 9, 26, 1, 3, 30, 0, time.UTC) }
+	result, err = manager.Fetch(ctx, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := result.Observations["refs/remotes/origin/topic"]; !ok {
+		t.Fatal("new remote branch was not observed")
+	}
+	run(t, writer, "git", "push", "--quiet", "origin", "--delete", "topic")
+	manager.Now = func() time.Time { return time.Date(2026, 9, 26, 1, 3, 45, 0, time.UTC) }
+	result, err = manager.Fetch(ctx, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := result.Observations["refs/remotes/origin/topic"]; ok {
+		t.Fatal("pruned remote branch remained in fresh observations")
+	}
+	successAt = result.Fetch.LastSuccessAt
 
 	if err := os.Rename(origin, origin+".offline"); err != nil {
 		t.Fatal(err)
