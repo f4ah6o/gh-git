@@ -37,7 +37,6 @@ func TestParseRepositoryRejectsAmbiguousAndUnsafeInputs(t *testing.T) {
 	}
 }
 
-
 func TestManagerRemoteURLDefaultsToCanonicalURL(t *testing.T) {
 	repo := Repository{Host: "github.com", Owner: "f4ah6o", Name: "example"}
 	manager := New(t.TempDir())
