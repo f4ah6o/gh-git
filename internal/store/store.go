@@ -97,7 +97,7 @@ func (m *Manager) remoteURL(repo Repository) string {
 	if m.RemoteURL != nil {
 		return m.RemoteURL(repo)
 	}
-	return m.remoteURL(repo)
+	return repo.URL()
 }
 
 var segmentPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
