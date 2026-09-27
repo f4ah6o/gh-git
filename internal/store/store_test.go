@@ -316,6 +316,104 @@ func TestFetchAtomicFailurePreservesLastSuccessAndObservations(t *testing.T) {
 	}
 }
 
+
+func TestInspectAndFetchRejectPhysicalSymlinkEscape(t *testing.T) {
+	for _, location := range []string{"host", "owner"} {
+		location := location
+		t.Run(location, func(t *testing.T) {
+			ctx := context.Background()
+			root := t.TempDir()
+			storeRoot := filepath.Join(root, "stores")
+			if err := os.MkdirAll(storeRoot, 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			origin := filepath.Join(root, "origin.git")
+			run(t, "", "git", "init", "--bare", "--quiet", origin)
+			run(t, origin, "git", "symbolic-ref", "HEAD", "refs/heads/main")
+
+			writer := filepath.Join(root, "writer")
+			run(t, "", "git", "init", "--quiet", "--initial-branch=main", writer)
+			run(t, writer, "git", "config", "user.name", "Test User")
+			run(t, writer, "git", "config", "user.email", "test@example.invalid")
+			if err := os.WriteFile(filepath.Join(writer, "file.txt"), []byte("outside\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			run(t, writer, "git", "add", "file.txt")
+			run(t, writer, "git", "commit", "--quiet", "-m", "outside")
+			run(t, writer, "git", "remote", "add", "origin", origin)
+			run(t, writer, "git", "push", "--quiet", "origin", "main")
+
+			repo := Repository{Host: "github.com", Owner: "example", Name: "repo"}
+			manager := New(storeRoot)
+			manager.RemoteURL = func(Repository) string { return origin }
+
+			externalRoot := filepath.Join(root, "external")
+			var externalStore string
+			var linkPath string
+			if location == "host" {
+				externalStore = filepath.Join(externalRoot, repo.Owner, repo.Name+".git")
+				linkPath = filepath.Join(storeRoot, repo.Host)
+			} else {
+				externalStore = filepath.Join(externalRoot, repo.Name+".git")
+				if err := os.MkdirAll(filepath.Join(storeRoot, repo.Host), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				linkPath = filepath.Join(storeRoot, repo.Host, repo.Owner)
+			}
+			if err := os.MkdirAll(filepath.Dir(externalStore), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			run(t, "", "git", "init", "--bare", "--quiet", externalStore)
+			run(t, externalStore, "git", "remote", "add", "origin", origin)
+			run(t, externalStore, "git", "config", "--replace-all", "remote.origin.fetch", fetchRefspec)
+			run(t, externalStore, "git", "fetch", "--quiet", "origin")
+			if err := manager.ensureMetadata(externalStore, repo); err != nil {
+				t.Fatal(err)
+			}
+
+			const ref = "refs/remotes/origin/main"
+			beforeRef := strings.TrimSpace(run(t, externalStore, "git", "rev-parse", ref))
+			metadataPath := filepath.Join(externalStore, metadataName)
+			beforeMetadata, err := os.ReadFile(metadataPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := os.Symlink(externalRoot, linkPath); err != nil {
+				t.Fatal(err)
+			}
+
+			assertPathEscape := func(operation string, err error) {
+				t.Helper()
+				if err == nil {
+					t.Fatalf("%s unexpectedly succeeded through an external symlink", operation)
+				}
+				escaped, ok := err.(*Error)
+				if !ok || escaped.Code != "path_escape" {
+					t.Fatalf("%s error = %#v, want *Error code path_escape", operation, err)
+				}
+			}
+
+			_, err = manager.Inspect(ctx, repo)
+			assertPathEscape("Inspect", err)
+			_, err = manager.Fetch(ctx, repo)
+			assertPathEscape("Fetch", err)
+
+			if got := strings.TrimSpace(run(t, externalStore, "git", "rev-parse", ref)); got != beforeRef {
+				t.Fatalf("external remote-tracking ref changed: %s != %s", got, beforeRef)
+			}
+			afterMetadata, err := os.ReadFile(metadataPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(afterMetadata, beforeMetadata) {
+				t.Fatal("external store metadata changed")
+			}
+		})
+	}
+}
+
 func run(t *testing.T, dir, name string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(name, args...)
