@@ -317,7 +317,6 @@ func TestFetchAtomicFailurePreservesLastSuccessAndObservations(t *testing.T) {
 	}
 }
 
-
 func TestInspectAndFetchRejectPhysicalSymlinkEscape(t *testing.T) {
 	for _, location := range []string{"host", "owner"} {
 		location := location
