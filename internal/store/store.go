@@ -217,9 +217,127 @@ func (m *Manager) StorePath(repo Repository) (string, error) {
 	return path, nil
 }
 
+func resolveStorePhysicalPath(path string, depth int) (string, error) {
+	if depth > 256 {
+		return "", fmt.Errorf("resolve store path: too many symlink levels")
+	}
+	if !filepath.IsAbs(path) {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("resolve store path: %w", err)
+		}
+		path = absolute
+	}
+	path = filepath.Clean(path)
+
+	info, err := os.Lstat(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return path, nil
+		}
+		resolvedParent, err := resolveStorePhysicalPath(parent, depth+1)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(resolvedParent, filepath.Base(path)), nil
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		link, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(link) {
+			link = filepath.Join(filepath.Dir(path), link)
+		}
+		return resolveStorePhysicalPath(link, depth+1)
+	}
+
+	parent := filepath.Dir(path)
+	if parent == path {
+		return path, nil
+	}
+	resolvedParent, err := resolveStorePhysicalPath(parent, depth+1)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolvedParent, filepath.Base(path)), nil
+}
+
+func storePathWithinPhysicalRoot(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil &&
+		rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator)) &&
+		!filepath.IsAbs(rel)
+}
+
+func (m *Manager) ensurePhysicalStorePath(path string) error {
+	root := m.Root
+	var err error
+	if strings.TrimSpace(root) == "" {
+		root, err = DefaultRoot()
+		if err != nil {
+			return err
+		}
+	}
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("resolve store root: %w", err)
+	}
+	target, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve store path: %w", err)
+	}
+	if !storePathWithinPhysicalRoot(root, target) {
+		return newError("path_escape", "", "repository store path escapes the configured store root")
+	}
+
+	physicalRoot, err := resolveStorePhysicalPath(root, 0)
+	if err != nil {
+		return fmt.Errorf("resolve physical store root: %w", err)
+	}
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return fmt.Errorf("resolve store path containment: %w", err)
+	}
+
+	current := root
+	for _, component := range strings.Split(rel, string(filepath.Separator)) {
+		if component == "" || component == "." {
+			continue
+		}
+		current = filepath.Join(current, component)
+		info, statErr := os.Lstat(current)
+		if errors.Is(statErr, os.ErrNotExist) {
+			break
+		}
+		if statErr != nil {
+			return fmt.Errorf("inspect store path: %w", statErr)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		physical, resolveErr := resolveStorePhysicalPath(current, 0)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve store path: %w", resolveErr)
+		}
+		if !storePathWithinPhysicalRoot(physicalRoot, physical) {
+			return newError("path_escape", "", "repository store path traverses a symlink outside the physical store root")
+		}
+	}
+	return nil
+}
+
 func (m *Manager) Ensure(ctx context.Context, repo Repository) (Result, error) {
 	path, err := m.StorePath(repo)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := m.ensurePhysicalStorePath(path); err != nil {
 		return Result{}, err
 	}
 	info, statErr := os.Lstat(path)
@@ -315,7 +433,7 @@ func (m *Manager) Fetch(ctx context.Context, repo Repository) (Result, error) {
 	now := m.now().UTC().Format(time.RFC3339Nano)
 	meta.LastAttemptAt = now
 
-	_, stderr, fetchErr := m.runGit(ctx, path, "fetch", "--prune", "origin")
+	_, stderr, fetchErr := m.runGit(ctx, path, "fetch", "--atomic", "--prune", "origin")
 	if fetchErr != nil {
 		info := classifyFetchError(stderr)
 		meta.LastError = &info
