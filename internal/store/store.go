@@ -375,6 +375,9 @@ func (m *Manager) Inspect(ctx context.Context, repo Repository) (Result, error) 
 	if err != nil {
 		return Result{}, err
 	}
+	if err := m.ensurePhysicalStorePath(path); err != nil {
+		return Result{}, err
+	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return Result{}, newError("store_missing", "", "repository store does not exist")
 	} else if err != nil {
@@ -416,6 +419,9 @@ func (m *Manager) Inspect(ctx context.Context, repo Repository) (Result, error) 
 func (m *Manager) Fetch(ctx context.Context, repo Repository) (Result, error) {
 	path, err := m.StorePath(repo)
 	if err != nil {
+		return Result{}, err
+	}
+	if err := m.ensurePhysicalStorePath(path); err != nil {
 		return Result{}, err
 	}
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
