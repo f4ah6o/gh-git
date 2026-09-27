@@ -102,3 +102,29 @@ func TestRemotes(t *testing.T) {
 		t.Fatalf("remotes = %#v", remotes)
 	}
 }
+
+func TestRootAndPathsSupportBareRepository(t *testing.T) {
+	tmp := t.TempDir()
+	root := filepath.Join(tmp, "repo.git")
+	cmd := exec.Command("git", "init", "--bare", "-q", root)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+
+	git := New()
+	git.WorkDir = root
+	got, err := git.Root(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != root {
+		t.Fatalf("bare root = %q, want %q", got, root)
+	}
+	paths, err := git.Paths(context.Background(), got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paths.ConfigDir != root || paths.ProfileDir != filepath.Join(root, "gh-git", "gh-config") {
+		t.Fatalf("bare paths = %#v", paths)
+	}
+}

@@ -111,10 +111,18 @@ func (c *Client) Root(ctx context.Context) (string, error) {
 		}
 	}
 	out, err := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--show-toplevel"})
-	if err != nil {
-		return "", errors.New("not inside a Git repository")
+	if err == nil {
+		return filepath.Clean(strings.TrimSpace(string(out))), nil
 	}
-	return filepath.Clean(strings.TrimSpace(string(out))), nil
+	bare, bareErr := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--is-bare-repository"})
+	if bareErr == nil && strings.TrimSpace(string(bare)) == "true" {
+		gitDir, gitDirErr := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--absolute-git-dir"})
+		if gitDirErr != nil {
+			return "", errors.New("cannot resolve bare Git repository")
+		}
+		return filepath.Clean(strings.TrimSpace(string(gitDir))), nil
+	}
+	return "", errors.New("not inside a Git repository")
 }
 
 func (c *Client) Paths(ctx context.Context, root string) (Paths, error) {
