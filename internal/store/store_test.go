@@ -173,7 +173,6 @@ func TestEnsureFetchAndFailedFetchPreserveLastObservation(t *testing.T) {
 	}
 }
 
-
 func TestEnsureRejectsPhysicalSymlinkEscape(t *testing.T) {
 	for _, location := range []string{"host", "owner"} {
 		location := location
