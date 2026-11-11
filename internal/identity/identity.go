@@ -9,6 +9,7 @@ import (
 
 var loginPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$`)
 var hostPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$`)
+var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 
 // Profile is the subset of the GitHub /user response needed to configure Git.
 // Email is deliberately not required for github.com because the stable
@@ -38,6 +39,15 @@ func ValidateLogin(login string) error {
 func ValidateHost(host string) error {
 	if !hostPattern.MatchString(host) || strings.Contains(host, "..") {
 		return fmt.Errorf("invalid GitHub host %q", host)
+	}
+	return nil
+}
+
+// ValidateRepositoryName rejects names that cannot be a GitHub repository
+// segment or that would escape the clone destination.
+func ValidateRepositoryName(name string) error {
+	if name == "." || name == ".." || !repositoryPattern.MatchString(name) {
+		return fmt.Errorf("invalid GitHub repository name %q", name)
 	}
 	return nil
 }

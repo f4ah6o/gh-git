@@ -52,6 +52,7 @@ gh extension install f4ah6o/gh-git
 | `gh git --version` | gh-git 自身のバージョンを表示する |
 | `gh git <git arguments...>` | 引数を shell で再解釈せず、実際の `git` へ委譲する。stdio、cwd、env、exit code を維持する |
 | `gh git -- <git arguments...>` | gh-git 側のコマンド名との曖昧さを避けて Git に明示委譲する |
+| `gh git clone <owner/repo> [<directory>] [--account <login>] [--hostname <host>]` | GitHub リポジトリを clone し、選択したアカウントで bind する |
 | `gh git bind <github-username> [--hostname <host>]` | 現在のリポジトリを GitHub アカウントへ紐付け、Git author と認証用設定を生成する |
 | `gh git unbind` | 紐付けを解除し、最初の bind 前に保存したローカル author を復元する |
 | `gh git binding status [--json]` | 紐付け、author、Git 配線、プロファイル、資格情報の利用可否を秘密情報なしで表示する |
@@ -64,8 +65,24 @@ gh extension install f4ah6o/gh-git
 
 `gh git version` は管理サブコマンドとして予約せず、実 Git の `git version` に委譲する。Git の global `--version` を明示的に使う場合は `gh git -- --version` とする。
 
+`clone` は複合コマンドとして予約する。ネイティブな `git clone` や任意 URL には `gh git -- clone ...` を使う。
+
 `status` と `init` は Git 本来のサブコマンドとして扱う。gh-git 自身の状態確認は `gh git binding status` を使う。
 `bind`、`unbind`、`accounts`、`doctor`、`env`、`shell-init` は互換性のためトップレベル管理コマンドとして維持する。
+
+## clone と bind の同時実行
+
+`gh git clone <owner/repo>` は clone と bind を一度に行う。宛先は省略可能で、相対パス・絶対パス・空白を含むパスを受け付ける。
+
+```bash
+gh git clone f4ah6o/gh-git
+gh git clone f4ah6o/gh-git "work/gh-git"
+gh git clone f4ah6o/gh-git --account f4ah6o
+```
+
+アカウント選択は決定的である。`--account` が最優先。次に owner が認証済みで利用可能なら owner。次に利用可能なアカウントが 1 つだけならそれ。複数ある場合は `--account` を要求し、任意のアカウントを黙って選ばない。organization や未認証の owner も同じフォールバックを使う。
+
+clone は HTTPS と選択アカウントの保存済み credential だけを使い、`gh auth switch` を呼ばない。既存の宛先は上書きしない。clone 成功後に bind が失敗した場合は clone を残し、復旧コマンドを表示する。ネイティブな Git clone や任意 URL には `gh git -- clone ...` を使う。
 
 代表例:
 
@@ -134,6 +151,7 @@ token の値をリポジトリへ書き込むことはない。
 ## 認証と SSH の注意
 
 - `gh auth switch` は呼び出さない。別リポジトリや別ターミナルのアクティブアカウントを変更しない。
+- `gh git clone` は継承した credential helper と ambient な token 環境変数を clone プロセスから除外し、選択アカウントの保存済み credential だけを使う。
 - token、PAT、OAuth credential、password は `.git/config`、生成プロファイル、追跡対象ファイルへ保存しない。
 - Git HTTPS は `gh auth token --hostname <host> --user <account>` を内部で使い、token をメモリ上で Git の credential protocol に渡す。
 - GitHub CLI が OS keyring からアカウント別 credential を解決できない環境では、`gh git doctor` と `gh auth status` の結果を確認する。CI では短命の `GH_TOKEN` または `GITHUB_TOKEN` を通常の方法で注入する。

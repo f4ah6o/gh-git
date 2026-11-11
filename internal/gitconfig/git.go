@@ -110,19 +110,57 @@ func (c *Client) Root(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("get current directory: %w", err)
 		}
 	}
-	out, err := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--show-toplevel"})
+	return c.RootAt(ctx, c.WorkDir)
+}
+
+// RootAt resolves the repository containing dir without changing the process
+// working directory. An empty dir means the current process directory.
+func (c *Client) RootAt(ctx context.Context, dir string) (string, error) {
+	if dir == "" {
+		var err error
+		dir, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("get current directory: %w", err)
+		}
+	}
+	out, err := c.runFrom(ctx, dir, []string{"rev-parse", "--show-toplevel"})
 	if err == nil {
 		return filepath.Clean(strings.TrimSpace(string(out))), nil
 	}
-	bare, bareErr := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--is-bare-repository"})
+	bare, bareErr := c.runFrom(ctx, dir, []string{"rev-parse", "--is-bare-repository"})
 	if bareErr == nil && strings.TrimSpace(string(bare)) == "true" {
-		gitDir, gitDirErr := c.runFrom(ctx, c.WorkDir, []string{"rev-parse", "--absolute-git-dir"})
+		gitDir, gitDirErr := c.runFrom(ctx, dir, []string{"rev-parse", "--absolute-git-dir"})
 		if gitDirErr != nil {
 			return "", errors.New("cannot resolve bare Git repository")
 		}
 		return filepath.Clean(strings.TrimSpace(string(gitDir))), nil
 	}
 	return "", errors.New("not inside a Git repository")
+}
+
+// Run executes git in dir with the supplied environment and forwards stdio.
+// The returned CommandError carries Git's exit code so callers can preserve it.
+func (c *Client) Run(ctx context.Context, dir string, args []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if c.Binary == "" {
+		c.Binary = "git"
+	}
+	command := exec.CommandContext(ctx, c.Binary, args...)
+	command.Dir = dir
+	if env != nil {
+		command.Env = env
+	}
+	command.Stdin = stdin
+	command.Stdout = stdout
+	command.Stderr = stderr
+	if err := command.Run(); err != nil {
+		exitCode := -1
+		var exitError *exec.ExitError
+		if errors.As(err, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
+		return &CommandError{Args: args, ExitCode: exitCode, err: err}
+	}
+	return nil
 }
 
 func (c *Client) Paths(ctx context.Context, root string) (Paths, error) {

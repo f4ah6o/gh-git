@@ -78,12 +78,14 @@ func (a *App) Run(ctx context.Context, args []string, input io.Reader) error {
 		return a.runBindingCommand(ctx, args, input)
 	case "shell-init":
 		return a.runBindingCommand(ctx, args, input)
+	case "clone":
+		return a.runCloneCommand(ctx, args[1:], input)
 	case "store":
 		return a.runStoreCommand(ctx, args[1:])
 	case "credential":
-		operation, err := parseCredentialArgs(args[1:])
+		request, err := parseCredentialArgs(args[1:])
 		if err == nil {
-			return a.Credential(ctx, operation, input)
+			return a.Credential(ctx, request.mode, request.operation, input)
 		}
 		return a.RunGit(ctx, args, input)
 	default:
@@ -171,6 +173,7 @@ Usage:
   gh git --version
   gh git <git arguments...>
   gh git -- <git arguments...>
+  gh git clone <owner/repo> [<directory>] [--account <login>] [--hostname <host>]
   gh git bind <github-username> [--hostname <host>]
   gh git unbind
   gh git binding status [--json]
@@ -192,8 +195,22 @@ Git passthrough examples:
   gh git switch -c feature/example
   gh git worktree list
 
+Clone and bind:
+  gh git clone f4ah6o/gh-git
+  gh git clone f4ah6o/gh-git --account f4ah6o
+  gh git clone f4ah6o/gh-git "work/gh-git"
+  gh git -- clone https://github.com/f4ah6o/gh-git.git
+
+  The owner is used as the binding account when it is authenticated and usable.
+  Otherwise the only usable account is used; if several are usable, pass
+  --account. The clone uses the selected account's stored credential and never
+  calls gh auth switch. An existing destination is never overwritten. If the
+  clone succeeds but binding fails, the clone is kept and a recovery command is
+  printed.
+
 gh-git management:
   --version    Print the gh-git version.
+  clone        Clone a GitHub repository and bind it to an account.
   bind         Bind this repository to one GitHub account.
   unbind       Remove gh-git's binding and restore prior local author values.
   binding      Management namespace. Use 'gh git binding status' for diagnostics.
@@ -220,6 +237,8 @@ Installation:
 
 Safety:
   - gh-git never calls gh auth switch.
+  - clone uses only the selected account's stored credential; ambient token
+    variables and inherited credential helpers are not used for the clone.
   - Tokens stay in gh's secure credential store and are never written to the repository.
   - Git passthrough preserves Git's own behavior, including destructive flags; gh-git
     does not add confirmation or reinterpret arguments.
@@ -318,11 +337,16 @@ func parseShellFlag(args []string) (string, error) {
 	return "", errors.New("usage: gh git env [--shell <bash|zsh|fish>]")
 }
 
-func parseCredentialArgs(args []string) (string, error) {
-	if len(args) == 2 && args[0] == "--managed" && (args[1] == "get" || args[1] == "store" || args[1] == "erase") {
-		return args[1], nil
+type credentialRequest struct {
+	mode      string
+	operation string
+}
+
+func parseCredentialArgs(args []string) (credentialRequest, error) {
+	if len(args) == 2 && (args[0] == "--managed" || args[0] == "--clone") && (args[1] == "get" || args[1] == "store" || args[1] == "erase") {
+		return credentialRequest{mode: strings.TrimPrefix(args[0], "--"), operation: args[1]}, nil
 	}
-	return "", errors.New("unsupported Git credential operation")
+	return credentialRequest{}, errors.New("unsupported Git credential operation")
 }
 
 type Binding struct {

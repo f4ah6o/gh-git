@@ -17,7 +17,8 @@ Branch: main
 - `gh git status` / `gh git init` は実 Git に passthrough する。
 - gh-git の状態確認は `gh git binding status [--json]` を使う。
 - `bind`、`unbind`、`accounts`、`doctor`、`env`、`shell-init` は既存利用者向けトップレベル alias として予約する。
-- 内部 credential helper の `credential --managed <get|store|erase>` は gh-git が処理する。それ以外の `credential ...` は Git に渡す。
+- `clone` は clone と bind を合成するトップレベル管理コマンドとして予約する。ネイティブな `git clone` は `gh git -- clone ...` を使う。
+- 内部 credential helper の `credential --managed <get|store|erase>` と clone 用の `credential --clone <get|store|erase>` は gh-git が処理する。それ以外の `credential ...` は Git に渡す。
 - `gh git -- <git arguments...>` は予約名を含めて Git に強制委譲する escape hatch とする。
 - `gh git -h` / `gh git --help` と引数なし `gh git help` は extension help を表示する。Git 側の global help が必要なら `gh git -- --help` を使う。
 

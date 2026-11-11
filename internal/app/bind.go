@@ -13,10 +13,16 @@ import (
 )
 
 func (a *App) Bind(ctx context.Context, account, hostOverride string) error {
+	return a.BindAt(ctx, a.Git.WorkDir, account, hostOverride)
+}
+
+// BindAt binds the repository containing dir. It never changes the process
+// working directory, so callers such as clone can bind a new checkout.
+func (a *App) BindAt(ctx context.Context, dir, account, hostOverride string) error {
 	if err := identity.ValidateLogin(account); err != nil {
 		return err
 	}
-	root, err := a.Git.Root(ctx)
+	root, err := a.Git.RootAt(ctx, dir)
 	if err != nil {
 		return err
 	}

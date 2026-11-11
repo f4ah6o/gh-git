@@ -86,6 +86,7 @@ func TestMainHelpDescribesQuickStart(t *testing.T) {
 		"gh git <git arguments...>",
 		"gh git status",
 		"gh git bind <github-username>",
+		"gh git clone <owner/repo>",
 		"gh git binding status",
 		"gh git shell-init bash",
 		"gh git doctor",
@@ -230,7 +231,7 @@ func TestGitPassthroughLocalRemotePushFetchPull(t *testing.T) {
 	run("--git-dir="+remote, "symbolic-ref", "HEAD", "refs/heads/main")
 
 	git.WorkDir = parent
-	run("clone", "-q", remote, "peer")
+	run("--", "clone", "-q", remote, "peer")
 	peer := filepath.Join(parent, "peer")
 	git.WorkDir = peer
 	run("config", "user.name", "Peer User")

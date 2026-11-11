@@ -70,6 +70,12 @@ gh git bind <github-username>
 gh git binding status
 ```
 
+To clone and bind in one step instead:
+
+```bash
+gh git clone <owner>/<repo>
+```
+
 After that, Git can be run through `gh git`; network operations use the
 repository binding where authentication is needed, while direct `gh` commands
 use the shell-selected profile:
@@ -95,6 +101,71 @@ repository's common Git directory, so linked worktrees share the same binding. B
 `GITHUB_TOKEN` precedence over stored credentials, the hook temporarily
 unsets the four GitHub token environment variables inside a bound repository
 and restores them on exit; it never writes their values to the repository.
+
+## Clone and bind
+
+`gh git clone` combines a GitHub clone with the normal bind operation:
+
+```bash
+gh git clone f4ah6o/gh-git
+```
+
+is equivalent to:
+
+```bash
+gh repo clone f4ah6o/gh-git
+(cd gh-git && gh git bind f4ah6o)
+```
+
+The destination is optional and may be relative or absolute. Paths containing
+spaces are passed to Git without a shell:
+
+```bash
+gh git clone f4ah6o/gh-git "work/gh-git"
+gh git clone f4ah6o/gh-git "/tmp/repos/gh-git"
+gh git clone f4ah6o/gh-git "dir with spaces/my repo"
+```
+
+Account selection is deterministic:
+
+- `--account <login>` uses that authenticated account.
+- Otherwise, the repository owner is used when it is an authenticated, usable
+  account.
+- Otherwise, the only usable account is used.
+- If several accounts are usable, the command fails and asks for `--account`.
+  It never silently chooses an arbitrary account.
+- Organizations and unauthenticated owners follow the same fallback.
+
+```bash
+gh git clone f4ah6o/gh-git --account f4ah6o
+gh git clone example-org/gh-git --account f4ah6o
+gh git clone f4ah6o/gh-git --hostname github.example.com
+```
+
+The clone always uses HTTPS and the selected account's stored credential
+through a temporary credential helper. It never calls `gh auth switch`, never
+changes the globally active account, and does not change the current working
+directory. Ambient `GH_TOKEN`/`GITHUB_TOKEN` variables and inherited Git
+credential helpers are not used for the composite clone; the selected account
+must have a credential in gh's secure store.
+
+An existing destination is never overwritten. If cloning fails, nothing is
+bound. If cloning succeeds but binding fails, the clone is kept and a recovery
+command is printed:
+
+```text
+warning: cloned f4ah6o/gh-git into /path/gh-git, but binding to f4ah6o failed: ...
+The clone was kept. Finish binding with:
+  cd '/path/gh-git' && gh git bind 'f4ah6o'
+```
+
+Use the explicit separator for native Git clone behavior or arbitrary URLs:
+
+```bash
+gh git -- clone https://github.com/f4ah6o/gh-git.git
+gh git -- clone git@github.com:f4ah6o/gh-git.git
+gh git -- clone --depth 1 https://github.com/f4ah6o/gh-git.git
+```
 
 ## Commands
 
@@ -144,11 +215,18 @@ separator when command routing needs to be unambiguous:
 
 ```bash
 gh git -- status --short
+gh git -- clone https://github.com/f4ah6o/gh-git.git
 ```
 
-Repository-binding management is available under the `binding` namespace:
+`clone` is the one reserved Git subcommand with composite behavior. Without
+the separator, `gh git clone <owner/repo>` clones and binds; with the
+separator, `gh git -- clone ...` is native Git.
+
+The composite clone command and repository-binding management are available as
+top-level commands:
 
 ```bash
+gh git clone <owner/repo> [<directory>] [--account <login>] [--hostname <host>]
 gh git bind <account> [--hostname <host>]
 gh git unbind
 gh git binding status
@@ -260,6 +338,10 @@ bind again. This avoids silently using the wrong SSH key.
 - Errors and status output intentionally omit credential values.
 - `gh auth switch` is never called, so binding repository A does not mutate
   repository B's or another terminal's active account.
+- `gh git clone` clears inherited Git credential helpers and ambient GitHub
+  token variables for the clone process. A temporary helper receives only the
+  selected host and account names; it resolves the token from gh's secure store
+  and returns it only through Git's credential-helper protocol.
 - A repository config is untrusted input. Do not accept a binding or generated
   file from an untrusted worktree without reviewing it.
 
@@ -287,6 +369,7 @@ go test ./...
 ```
 
 Tests use temporary repositories and isolated Git configuration. They cover
-binding/unbinding, account metadata and noreply email, malformed config,
-credential masking, HTTPS helper behavior, SSH alias detection, and parallel
-repository isolation.
+binding/unbinding, clone-and-bind, account resolution, destination safety,
+clone/bind failure recovery, account metadata and noreply email, malformed
+config, credential masking, HTTPS helper behavior, SSH alias detection, and
+parallel repository isolation.

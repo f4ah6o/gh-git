@@ -59,3 +59,16 @@ func TestAuthorEmailUsesEnterpriseProfileEmail(t *testing.T) {
 		t.Fatalf("email = %q", got)
 	}
 }
+
+func TestValidateRepositoryName(t *testing.T) {
+	for _, name := range []string{"gh-git", "gh_git", ".github", "repo.js", "A1"} {
+		if err := ValidateRepositoryName(name); err != nil {
+			t.Fatalf("ValidateRepositoryName(%q) error = %v", name, err)
+		}
+	}
+	for _, name := range []string{"", ".", "..", "repo name", "repo/name", "repo:name"} {
+		if err := ValidateRepositoryName(name); err == nil {
+			t.Fatalf("ValidateRepositoryName(%q) accepted an invalid name", name)
+		}
+	}
+}
